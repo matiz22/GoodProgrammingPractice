@@ -4,7 +4,7 @@ from db_setup import create_db
 from movies import routes as movie_router
 from links import routes as links_routes
 from ratings import routes as ratings_routes
-from tags import tags_routes
+from tags import routes as tags_routes
 
 create_db()
 app = FastAPI()
