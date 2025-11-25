@@ -14,7 +14,7 @@ class MoviesService:
     @staticmethod
     def get_by_id(movie_id: int) -> Optional[Movie]:
         with get_session() as session:
-            orm_movie = session.query(MovieORM).filter(MovieORM.id == movie_id).first()
+            orm_movie = session.query(MovieORM).filter(MovieORM.movieId == movie_id).first()
             return Movie.model_validate(orm_movie) if orm_movie else None
 
     @staticmethod
@@ -29,7 +29,7 @@ class MoviesService:
     @staticmethod
     def update(movie_id: int, movie_data: dict) -> Optional[Movie]:
         with get_session() as session:
-            orm_movie = session.query(MovieORM).filter(MovieORM.id == movie_id).first()
+            orm_movie = session.query(MovieORM).filter(MovieORM.movieId == movie_id).first()
             if not orm_movie:
                 return None
             for key, value in movie_data.items():
@@ -42,7 +42,7 @@ class MoviesService:
     @staticmethod
     def delete(movie_id: int) -> bool:
         with get_session() as session:
-            orm_movie = session.query(MovieORM).filter(MovieORM.id == movie_id).first()
+            orm_movie = session.query(MovieORM).filter(MovieORM.movieId == movie_id).first()
             if not orm_movie:
                 return False
             session.delete(orm_movie)
