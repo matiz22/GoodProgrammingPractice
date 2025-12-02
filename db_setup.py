@@ -12,8 +12,17 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()
 
-@contextmanager
+# New: FastAPI dependency (generator) that yields a Session instance for Depends(...)
 def get_session():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+# keep a contextmanager for test code that uses: with get_session_ctx() as db:
+@contextmanager
+def get_session_ctx():
     session = SessionLocal()
     try:
         yield session
