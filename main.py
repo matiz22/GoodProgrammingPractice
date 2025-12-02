@@ -1,16 +1,21 @@
-# This is a sample Python script.
+from fastapi import FastAPI
 
-# Press ⌃R to execute it or replace it with your code.
-# Press Double ⇧ to search everywhere for classes, files, tool windows, actions, and settings.
+from db_setup import create_db
+from movies import routes as movie_router
+from links import routes as links_routes
+from ratings import routes as ratings_routes
+from tags import routes as tags_routes
+
+create_db()
+app = FastAPI()
 
 
-def print_hi(name):
-    # Use a breakpoint in the code line below to debug your script.
-    print(f'Hi, {name}')  # Press ⌘F8 to toggle the breakpoint.
+@app.get("/")
+def read_root():
+    return {"Hello": "World"}
 
 
-# Press the green button in the gutter to run the script.
-if __name__ == '__main__':
-    print_hi('PyCharm')
-
-# See PyCharm help at https://www.jetbrains.com/help/pycharm/
+app.include_router(movie_router.router)
+app.include_router(links_routes.router)
+app.include_router(ratings_routes.router)
+app.include_router(tags_routes.router)
