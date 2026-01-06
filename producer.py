@@ -1,45 +1,25 @@
-import csv
-import os
-import fcntl
-import time
-import uuid
 import argparse
-
-DB_FILE = 'jobs.csv'
-
-def acquire_lock(file_obj):
-    fcntl.flock(file_obj.fileno(), fcntl.LOCK_EX)
-
-def release_lock(file_obj):
-    fcntl.flock(file_obj.fileno(), fcntl.LOCK_UN)
-
-def init_db():
-    if not os.path.exists(DB_FILE):
-        with open(DB_FILE, 'w', newline='') as f:
-            acquire_lock(f)
-            writer = csv.writer(f)
-            writer.writerow(['id', 'status', 'created_at'])
-            f.flush()
-            release_lock(f)
+import time
+from models import init_db, SessionLocal, Job
 
 def add_job():
-    # Open in append mode, but we might need to read if we were using auto-increment IDs.
-    # Using UUIDs is safer for concurrent appending.
-    
-    job_id = str(uuid.uuid4())
-    timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
-
-    
-    with open(DB_FILE, 'a', newline='') as f:
-        acquire_lock(f)
-        try:
-            writer = csv.writer(f)
-            writer.writerow([job_id, 'pending', timestamp])
-            f.flush()
-            os.fsync(f.fileno())
-            print(f"Producer: Added job {job_id}")
-        finally:
-            release_lock(f)
+    session = SessionLocal()
+    try:
+        # Create a new job
+        new_job = Job()
+        session.add(new_job)
+        session.commit()
+        session.refresh(new_job)
+        
+        # We simulate the timestamp print format from the original code
+        # though it's stored as a datetime object in the DB now.
+        timestamp = new_job.created_at.strftime("%Y-%m-%d %H:%M:%S")
+        print(f"Producer: Added job {new_job.id}")
+    except Exception as e:
+        print(f"Error adding job: {e}")
+        session.rollback()
+    finally:
+        session.close()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Producer')
