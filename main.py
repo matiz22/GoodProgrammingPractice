@@ -3,8 +3,12 @@ import argparse
 import time
 import sys
 import signal
+from models import init_db
 
 def run_consumers(num_consumers):
+    # Ensure DB is created
+    init_db()
+
     processes = []
     print(f"Starting {num_consumers} consumer(s)……")
     
