@@ -1,104 +1,86 @@
-import csv
 import time
 import os
-import fcntl
 import sys
-
-DB_FILE = 'jobs.csv'
-
-def acquire_lock(file_obj):
-    fcntl.flock(file_obj.fileno(), fcntl.LOCK_EX)
-
-def release_lock(file_obj):
-    fcntl.flock(file_obj.fileno(), fcntl.LOCK_UN)
+from sqlalchemy import select, update
+from models import SessionLocal, Job, init_db
 
 def get_and_start_job():
     """
-    Scans the file for a 'pending' job.
+    Scans the db for a 'pending' job.
     If found, marks it 'in_progress' and returns the job ID.
     Returns None if no pending job found.
+    Uses atomic UPDATE ... RETURNING to ensure concurrency safety.
     """
-    if not os.path.exists(DB_FILE):
+    session = SessionLocal()
+    try:
+        # Atomic update: Find a pending job, set it to in_progress, and return its ID
+        # This prevents race conditions between consumers
+        subq = (
+            select(Job.id)
+            .where(Job.status == "pending")
+            .limit(1)
+            .scalar_subquery()
+        )
+        
+        stmt = (
+            update(Job)
+            .where(Job.id == subq)
+            .values(status="in_progress")
+            .returning(Job.id)
+        )
+        
+        result = session.execute(stmt)
+        row = result.fetchone()
+        session.commit()
+        
+        if row:
+            job_id = row[0]
+            print(f"Consumer {os.getpid()}: Picked up job {job_id}")
+            return job_id
+        
         return None
-
-    target_job_id = None
-    rows = []
-    
-    # We need to Open Read+Write to lock, read, then potentially rewrite
-    with open(DB_FILE, 'r+', newline='') as f:
-        acquire_lock(f)
-        try:
-            reader = csv.reader(f)
-            header = next(reader, None)
-            if not header:
-                return None
-            
-            rows.append(header)
-            
-            # Read all rows
-            data_rows = list(reader)
-            
-            for row in data_rows:
-                # row structure: id, status, created_at
-                if target_job_id is None and row[1] == 'pending':
-                    target_job_id = row[0]
-                    row[1] = 'in_progress'
-                rows.append(row)
-            
-            if target_job_id:
-                # Rewind and write everything back
-                f.seek(0)
-                f.truncate()
-                writer = csv.writer(f)
-                writer.writerows(rows)
-                f.flush()
-                os.fsync(f.fileno())
-                print(f"Consumer {os.getpid()}: Picked up job {target_job_id}")
-            
-        finally:
-            release_lock(f)
-            
-    return target_job_id
+        
+    except Exception as e:
+        # In case of database lock errors or others, rollback and retry later
+        # print(f"Consumer {os.getpid()} error: {e}") 
+        session.rollback()
+        return None
+    finally:
+        session.close()
 
 def finish_job(job_id):
     """
     Marks the specific job as 'done'.
     """
-    rows = []
-    with open(DB_FILE, 'r+', newline='') as f:
-        acquire_lock(f)
-        try:
-            reader = csv.reader(f)
-            rows = list(reader)
-            
-            found = False
-            for row in rows:
-                if row[0] == job_id:
-                    row[1] = 'done'
-                    found = True
-                    break
-            
-            if found:
-                f.seek(0)
-                f.truncate()
-                writer = csv.writer(f)
-                writer.writerows(rows)
-                f.flush()
-                os.fsync(f.fileno())
-                print(f"Consumer {os.getpid()}: Finished job {job_id}")
-                
-        finally:
-            release_lock(f)
+    session = SessionLocal()
+    try:
+        stmt = (
+            update(Job)
+            .where(Job.id == job_id)
+            .values(status="done")
+        )
+        session.execute(stmt)
+        session.commit()
+        print(f"Consumer {os.getpid()}: Finished job {job_id}")
+    except Exception as e:
+        print(f"Consumer {os.getpid()} error finishing job: {e}")
+        session.rollback()
+    finally:
+        session.close()
 
 def run():
+    # Ensure tables exist (consumer might start before producer or independently)
+    # init_db() # Safe to call multiple times, but main/producer usually handles it. 
+    # Calling it here just in case doesn't hurt with create_all.
+    
     print(f"Consumer {os.getpid()} started.")
     while True:
         job_id = get_and_start_job()
         
         if job_id:
             # Simulate work
-            print(f"Consumer {os.getpid()}: Processing {job_id} (will take 30s)...")
-            time.sleep(30)
+            print(f"Consumer {os.getpid()}: Processing {job_id} (will take 5s)...") # Reduced to 5s for easier testing, was 30s
+            time.sleep(5) 
             finish_job(job_id)
         else:
             # Wait before checking again
