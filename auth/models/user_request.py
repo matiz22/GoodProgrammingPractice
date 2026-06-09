@@ -1,4 +1,4 @@
-from pydantic import BaseModel, constr
+gmefrom pydantic import BaseModel, constr
 
 class UserCreate(BaseModel):
     username: constr(min_length=3, max_length=150)
